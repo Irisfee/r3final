@@ -10,7 +10,7 @@ output:
 ---
 
 ```{r pkg, message = FALSE, warning = FALSE}
-# to run the codes, ggpubr and magrittr pkgs are also needed
+# to run the codes, ggpubr, emmeans, and magrittr pkgs are also needed
 pacman::p_load(tidyverse, here, fs, glue, afex, emmeans, knitr, psych, flexdashboard)
 ```
 
