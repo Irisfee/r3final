@@ -210,3 +210,68 @@ dat_rtv$group <- recode_factor(dat_rtv$group, `1` = "Paired", `2` = "Control")
 dat_rtv$simi_cond <- factor(dat_rtv$simi_cond, levels = c("within_item", "same_color", "between_pair", "within_pair"))
 ```
 
+### Pattern stimilarity results for each condition by group
+```{r}
+# average data across subject
+dat_rtv_all <- dat_rtv %>% 
+  group_by(group, atlas_id, roi_id, roi_hemi, simi_cond) %>% 
+  summarise(similarity = mean(similarity)) %>% 
+  spread(key = "simi_cond", value = "similarity") %>% 
+  filter(roi_hemi == "bilateral")
+
+kable(dat_rtv_all)
+```
+
+### pure color representation: same_color - between_pair
+```{r}
+# pure color: same_color - between_pair
+# nest
+tmp <- dat_rtv %>% 
+  group_by(atlas_id, roi_id, roi_hemi, subj_id, group) %>% 
+  nest() %>% 
+  mutate(
+    data = map(data, 
+               ~ data.frame(spread(data = ., key = simi_cond, value = similarity))),
+    group_contrast = map(data, 
+                         ~ mutate(., a = (same_color - between_pair)) %>%
+                           pull()),
+    group_contrast = as.numeric(group_contrast)
+  ) %>% 
+  select(-data) %>% 
+  unnest() %>% 
+  group_by(atlas_id, roi_id, roi_hemi) %>% 
+  nest() %>% 
+  mutate(
+    one_way = map(data, 
+                  ~ aov_ez(data = ., id = "subj_id", dv = "group_contrast", within = "group"))
+  )
+# get model based summary table for plotting
+# error bar indicates within-subject errors
+dat_plot <-
+  tmp %>%
+  mutate(
+    model_based_summary = map(
+      one_way,
+      ~ afex_plot(.x, x = "group", error = "within", error_ci = FALSE, return = "data")
+    ),
+    summary_table = map(
+      model_based_summary,
+      ~ magrittr::extract2(.x, 1)
+    )
+  ) %>% 
+  unnest(summary_table) %>% 
+  select(atlas_id, roi_id, roi_hemi, x, y, error, lower, upper) %>%
+  rename(group = x, similarity = y)
+```
+
+```{r }
+dat_plot %>% 
+  filter(atlas_id == "Destrieux",
+         roi_hemi == "bilateral") %>% 
+  ggplot(aes(x = group, y = similarity, fill = group)) +
+  facet_wrap(~ roi_id) +
+  geom_bar(stat = "identity", width = 0.5) +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2, size = 0.7)
+```
+
+
