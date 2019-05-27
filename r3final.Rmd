@@ -1,0 +1,212 @@
+---
+title: "R3 final"
+author: "Xi Yang, Yufei Zhao"
+date: "`r format(Sys.time(), '%b-%d-%Y %H:%M')`"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    social: menu
+    source_code: embed
+---
+
+```{r pkg, message = FALSE, warning = FALSE}
+# to run the codes, ggpubr and magrittr pkgs are also needed
+pacman::p_load(tidyverse, here, fs, glue, afex, emmeans, knitr, psych, flexdashboard)
+```
+
+```{r default,  message = FALSE, warning = FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
+knitr::opts_chunk$set(dpi = 300)
+afex_options(emmeans_model = "multivariate")
+theme_set(ggpubr::theme_pubclean())
+```
+
+```{r dir-setting}
+# Directories
+bids_dir <- path(here())
+deriv_dir <- path(bids_dir, "derivatives")
+data_dir <- path(deriv_dir, "pattern_similarity")
+```
+
+```{r sub-list}
+# Subject list
+subj_list <- 
+  read_tsv(path(bids_dir, "participants.tsv"), col_types = "cicc") %>% 
+  select(participant_id) %>% 
+  separate(participant_id, c("prefix", "id"), sep = "-") %>% 
+  pull(id)
+```
+
+```{r preprocess-flavor}
+# fMRI data preprocessing flavor
+preproc_id <-  "hp0p01-smooth1p7"
+estimate_id <- "tmaps"
+flavor_id <- ""
+```
+
+```{r helper-function}
+# function 1
+# read in pattern similarity label map
+read_labels <-
+  function(label_file) {
+    labels <- read_tsv(label_file, na = "999", col_types = cols(.default = col_character())) %>%
+      mutate_at(
+        c(
+          "i1_group", "i2_group", "i1_item", "i2_item", "i1_pair", "i2_pair", "i1_color", "i2_color", "i1_obj", "i2_obj",  "pair_index"
+        ),
+        as.integer
+      )
+    return(labels)
+  }
+
+# function 2
+# read in pattern similarity data map
+read_simi <-
+  function(simi_file, label_file) {
+    # load data
+    simi <- read_tsv(simi_file, col_types = "ccccdd")
+    # load labels
+    labels <- read_labels(label_file)
+    # merge labels into data table
+    simi <- left_join(simi, labels, by = c("subj_id", "pair_index"))
+    return(simi)
+  }
+
+```
+
+```{r read-data}
+# map 1
+simi_list_rtv <- 
+  map_chr(
+  subj_list, ~ path(
+    data_dir,
+    glue("sub-", .x),
+    "roi_pearson_similarity",
+    glue(
+      "sub-",
+      .x,
+      "_space-T1w_task-retrieval_desc-{preproc_id}-{estimate_id}-zr{flavor_id}_similarity.tsv"
+    )
+  )
+)
+
+# map 2
+labels_list <-
+  map_chr(
+    subj_list, ~ path(
+      data_dir,
+      glue("sub-", .x),
+      "beh_labels",
+      glue("sub-", .x, "_labels_pairwise.tsv")
+    )
+  )
+
+# map2_*
+simi_rtv_raw <- map2_df(simi_list_rtv, labels_list, ~ read_simi(.x, .y))
+```
+
+```{r reduce-unrelated-pairs}
+simi_rtv_reduced <- simi_rtv_raw %>% 
+  filter(!i1_run_type == i2_run_type) %>% 
+  filter(i1_group == i2_group) %>% 
+  mutate(group = (i1_group + i2_group)/2) %>% 
+  select(subj_id, atlas_id, roi_id, roi_hemi, similarity, i1_item, i2_item, group, i1_obj, i2_obj)
+```
+
+```{r separate-within-item}
+simi_rtv_within <- simi_rtv_reduced %>% 
+  filter(i1_item == i2_item)
+simi_rtv_non_within <- simi_rtv_reduced %>% 
+  filter(!i1_item == i2_item)
+```
+
+```{r label-same-pair}
+simi_rtv_non_within_pair <- simi_rtv_non_within %>% 
+  mutate(
+    pair_match = case_when(
+      (i1_item < i2_item) ~ sprintf("%02d%02d", i1_item,i2_item),
+      (i1_item > i2_item) ~ sprintf("%02d%02d", i2_item,i1_item)
+    ),
+    pair_match_obj = case_when(
+      (i1_obj < i2_obj) ~ sprintf("%02d%02d", i1_obj,i2_obj),
+      (i1_obj > i2_obj) ~ sprintf("%02d%02d", i2_obj,i1_obj)
+    )
+  ) %>% 
+  group_by(subj_id, atlas_id, roi_id, roi_hemi, pair_match, pair_match_obj) %>% 
+  summarise(similarity = mean(similarity),
+            group = mean(group)) %>% 
+  separate(col = pair_match, into = c("i1_item", "i2_item"), sep = 2) %>% 
+  separate(col = pair_match_obj, into = c("i1_obj", "i2_obj"), sep = 2) %>%
+  ungroup()
+
+simi_rtv_non_within_pair$i1_item <- as.integer(simi_rtv_non_within_pair$i1_item)
+simi_rtv_non_within_pair$i2_item <- as.integer(simi_rtv_non_within_pair$i2_item)
+simi_rtv_non_within_pair$i1_obj <- as.integer(simi_rtv_non_within_pair$i1_obj)
+simi_rtv_non_within_pair$i2_obj <- as.integer(simi_rtv_non_within_pair$i2_obj)
+simi_rtv_unlabel <- rbind(simi_rtv_within, simi_rtv_non_within_pair)
+```
+
+```{r label-category}
+simi_rtv <-  simi_rtv_unlabel %>% 
+  mutate(
+    simi_cond = case_when(
+      (i1_item == i2_item) ~ 'within_item',
+      (i1_item == 1 & i2_item == 3) ~ 'within_pair',
+      (i1_item == 2 & i2_item == 4) ~ 'within_pair',
+      (i1_item == 5 & i2_item == 7) ~ 'within_pair',
+      (i1_item == 6 & i2_item == 8) ~ 'within_pair',
+      (i1_item == 9 & i2_item == 11) ~ 'within_pair',
+      (i1_item == 10 & i2_item == 12) ~ 'within_pair',
+      (i1_item == 13 & i2_item == 15) ~ 'within_pair',
+      (i1_item == 14 & i2_item == 16) ~ 'within_pair',
+      (i1_item == 17 & i2_item == 19) ~ 'within_pair',
+      (i1_item == 18 & i2_item == 20) ~ 'within_pair',
+      (i1_item == 21 & i2_item == 23) ~ 'within_pair',
+      (i1_item == 22 & i2_item == 24) ~ 'within_pair',
+      (i1_item == 1 & i2_item == 2) ~ 'same_color',
+      (i1_item == 3 & i2_item == 4) ~ 'same_color',
+      (i1_item == 5 & i2_item == 6) ~ 'same_color',
+      (i1_item == 7 & i2_item == 8) ~ 'same_color',
+      (i1_item == 9 & i2_item == 10) ~ 'same_color',
+      (i1_item == 11 & i2_item == 12) ~ 'same_color',
+      (i1_item == 13 & i2_item == 14) ~ 'same_color',
+      (i1_item == 15 & i2_item == 16) ~ 'same_color',
+      (i1_item == 17 & i2_item == 18) ~ 'same_color',
+      (i1_item == 19 & i2_item == 20) ~ 'same_color',
+      (i1_item == 21 & i2_item == 22) ~ 'same_color',
+      (i1_item == 23 & i2_item == 24) ~ 'same_color',
+      (i1_item == 3 & i2_item == 5) ~ 'between_pair',
+      (i1_item == 3 & i2_item == 6) ~ 'between_pair',
+      (i1_item == 4 & i2_item == 5) ~ 'between_pair',
+      (i1_item == 4 & i2_item == 6) ~ 'between_pair', 
+      (i1_item == 7 & i2_item == 9) ~ 'between_pair',
+      (i1_item == 7 & i2_item == 10) ~ 'between_pair',
+      (i1_item == 8 & i2_item == 9) ~ 'between_pair',
+      (i1_item == 8 & i2_item == 10) ~ 'between_pair',
+      (i1_item == 15 & i2_item == 17) ~ 'between_pair',
+      (i1_item == 15 & i2_item == 18) ~ 'between_pair',
+      (i1_item == 16 & i2_item == 17) ~ 'between_pair',
+      (i1_item == 16 & i2_item == 18) ~ 'between_pair',
+      (i1_item == 19 & i2_item == 21) ~ 'between_pair',
+      (i1_item == 19 & i2_item == 22) ~ 'between_pair',
+      (i1_item == 20 & i2_item == 21) ~ 'between_pair',
+      (i1_item == 20 & i2_item == 22) ~ 'between_pair',
+      TRUE ~ "other"
+    )
+  )
+```
+
+
+```{r}
+# Average similarity across different condition (within-item, within-pair, between-pair) within subject
+
+dat_rtv <- simi_rtv %>%
+  group_by(group, subj_id, atlas_id, roi_id, roi_hemi, simi_cond) %>%
+  summarise(similarity = mean(similarity)) %>%
+  ungroup() %>% 
+  filter(!simi_cond == 'other') %>% 
+  filter(roi_id %in% c("ANG", "IPS","SPL","HPC","OTC"))
+dat_rtv$group <- recode_factor(dat_rtv$group, `1` = "Paired", `2` = "Control")
+dat_rtv$simi_cond <- factor(dat_rtv$simi_cond, levels = c("within_item", "same_color", "between_pair", "within_pair"))
+```
+
