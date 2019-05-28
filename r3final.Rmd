@@ -1,5 +1,5 @@
 ---
-title: "R3 final"
+title: "R3 final: Parietal cortex's role in tracking adaptive memory feature"
 author: "Xi Yang, Yufei Zhao"
 date: "`r format(Sys.time(), '%b-%d-%Y %H:%M')`"
 output: 
@@ -10,8 +10,9 @@ output:
 ---
 
 ```{r pkg, message = FALSE, warning = FALSE}
-# to run the codes, ggpubr, emmeans, and magrittr pkgs are also needed
+# to run the codes, ggpubr and magrittr pkgs are also needed
 pacman::p_load(tidyverse, here, fs, glue, afex, emmeans, knitr, psych, flexdashboard)
+# afex is used for stats modeling
 ```
 
 ```{r default,  message = FALSE, warning = FALSE}
@@ -22,7 +23,7 @@ theme_set(ggpubr::theme_pubclean())
 ```
 
 ```{r dir-setting}
-# Directories
+# Directories to bids form data
 bids_dir <- path(here())
 deriv_dir <- path(bids_dir, "derivatives")
 data_dir <- path(deriv_dir, "pattern_similarity")
@@ -39,6 +40,7 @@ subj_list <-
 
 ```{r preprocess-flavor}
 # fMRI data preprocessing flavor
+# pattern similarity data were processed with python
 preproc_id <-  "hp0p01-smooth1p7"
 estimate_id <- "tmaps"
 flavor_id <- ""
@@ -46,7 +48,7 @@ flavor_id <- ""
 
 ```{r helper-function}
 # function 1
-# read in pattern similarity label map
+# read in pattern similarity label map (item-wise)
 read_labels <-
   function(label_file) {
     labels <- read_tsv(label_file, na = "999", col_types = cols(.default = col_character())) %>%
@@ -102,18 +104,25 @@ labels_list <-
   )
 
 # map2_*
+# get the combined data
 simi_rtv_raw <- map2_df(simi_list_rtv, labels_list, ~ read_simi(.x, .y))
 ```
 
 ```{r reduce-unrelated-pairs}
+# the raw data have full pairwise pattern similarity results
+# reduce the two items that are not in the same run
 simi_rtv_reduced <- simi_rtv_raw %>% 
   filter(!i1_run_type == i2_run_type) %>% 
   filter(i1_group == i2_group) %>% 
   mutate(group = (i1_group + i2_group)/2) %>% 
   select(subj_id, atlas_id, roi_id, roi_hemi, similarity, i1_item, i2_item, group, i1_obj, i2_obj)
+# atlas_id: the brain altas name
+# roi_id: the region of interest
+# roi_hemi: left/right/bi
 ```
 
 ```{r separate-within-item}
+# get within-item data and non within-item data
 simi_rtv_within <- simi_rtv_reduced %>% 
   filter(i1_item == i2_item)
 simi_rtv_non_within <- simi_rtv_reduced %>% 
@@ -121,6 +130,7 @@ simi_rtv_non_within <- simi_rtv_reduced %>%
 ```
 
 ```{r label-same-pair}
+# for non within-item data label info that can help with labling category info
 simi_rtv_non_within_pair <- simi_rtv_non_within %>% 
   mutate(
     pair_match = case_when(
@@ -147,6 +157,7 @@ simi_rtv_unlabel <- rbind(simi_rtv_within, simi_rtv_non_within_pair)
 ```
 
 ```{r label-category}
+# lable all categories
 simi_rtv <-  simi_rtv_unlabel %>% 
   mutate(
     simi_cond = case_when(
@@ -199,7 +210,7 @@ simi_rtv <-  simi_rtv_unlabel %>%
 
 ```{r}
 # Average similarity across different condition (within-item, within-pair, between-pair) within subject
-
+# select regions in parietal cortex, visual cortex, and hippocampus
 dat_rtv <- simi_rtv %>%
   group_by(group, subj_id, atlas_id, roi_id, roi_hemi, simi_cond) %>%
   summarise(similarity = mean(similarity)) %>%
@@ -213,6 +224,7 @@ dat_rtv$simi_cond <- factor(dat_rtv$simi_cond, levels = c("within_item", "same_c
 ### Pattern stimilarity results for each condition by group
 ```{r}
 # average data across subject
+# select only bilateral roi
 dat_rtv_all <- dat_rtv %>% 
   group_by(group, atlas_id, roi_id, roi_hemi, simi_cond) %>% 
   summarise(similarity = mean(similarity)) %>% 
@@ -222,7 +234,7 @@ dat_rtv_all <- dat_rtv %>%
 kable(dat_rtv_all)
 ```
 
-### pure color representation: same_color - between_pair
+### Pure color representation: same_color - between_pair
 ```{r}
 # pure color: same_color - between_pair
 # nest
@@ -233,7 +245,7 @@ tmp <- dat_rtv %>%
     data = map(data, 
                ~ data.frame(spread(data = ., key = simi_cond, value = similarity))),
     group_contrast = map(data, 
-                         ~ mutate(., a = (same_color - between_pair)) %>%
+                         ~ mutate(., a = (same_color - between_pair)) %>% # substract between_pair similarity from the same_color similarity
                            pull()),
     group_contrast = as.numeric(group_contrast)
   ) %>% 
@@ -243,8 +255,9 @@ tmp <- dat_rtv %>%
   nest() %>% 
   mutate(
     one_way = map(data, 
-                  ~ aov_ez(data = ., id = "subj_id", dv = "group_contrast", within = "group"))
+                  ~ aov_ez(data = ., id = "subj_id", dv = "group_contrast", within = "group")) # one-way within-subject anova
   )
+
 # get model based summary table for plotting
 # error bar indicates within-subject errors
 dat_plot <-
