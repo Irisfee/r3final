@@ -16,26 +16,31 @@ pacman::p_load(tidyverse, here, fs, glue, afex, emmeans, knitr, psych, flexdashb
 ```
 
 ```{r default,  message = FALSE, warning = FALSE}
-knitr::opts_chunk$set(message = FALSE, warning = FALSE)
-knitr::opts_chunk$set(dpi = 300)
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, dpi = 300)
 afex_options(emmeans_model = "multivariate")
-theme_set(ggpubr::theme_pubclean())
+theme_set(ggpubr::theme_pubclean()) # Cam: I have never come across theme_pubclean before. This is really cool and looks like it will save a lot of time when creating the plots.
 ```
 
 ```{r dir-setting}
 # Directories to bids form data
-bids_dir <- path(here())
-deriv_dir <- path(bids_dir, "derivatives")
-data_dir <- path(deriv_dir, "pattern_similarity")
+# bids_dir <- path(here())
+# deriv_dir <- path(bids_dir, "derivatives")
+# data_dir <- path(deriv_dir, "pattern_similarity")
+
+# Cam: It looked like you could have streamlined the code here by leveraging 
+# `here`'s arguments e.g., 
+data_dir <- here("derivatives", "pattern_similarity")
 ```
 
 ```{r sub-list}
 # Subject list
-subj_list <- 
-  read_tsv(path(bids_dir, "participants.tsv"), col_types = "cicc") %>% 
+subj_list <- read_tsv(here("participants.tsv")) %>% 
   select(participant_id) %>% 
-  separate(participant_id, c("prefix", "id"), sep = "-") %>% 
+  separate(participant_id, c(NA, "id"), sep = "-") %>%
   pull(id)
+
+# Cam: I really like your use of col_types to streamline setting the variable types. Looks much quicker than having to do it using `mutate`. It may be a bit redundant, however, since you only wanted to keep participant_id and it would automatically be imported as a character.
+# Cam: Also, I haven't come across pull - very cool!
 ```
 
 ```{r preprocess-flavor}
@@ -49,99 +54,121 @@ flavor_id <- ""
 ```{r helper-function}
 # function 1
 # read in pattern similarity label map (item-wise)
-read_labels <-
-  function(label_file) {
-    labels <- read_tsv(label_file, na = "999", col_types = cols(.default = col_character())) %>%
-      mutate_at(
-        c(
-          "i1_group", "i2_group", "i1_item", "i2_item", "i1_pair", "i2_pair", "i1_color", "i2_color", "i1_obj", "i2_obj",  "pair_index"
-        ),
-        as.integer
-      )
-    return(labels)
-  }
+read_labels <- function(label_file) {
+  read_tsv(label_file, na = "999") %>%
+    mutate_if(is.double, as.integer)
+}
+
+# Cam: I wasn't sure of the benefit of forcing all columns to be character and then converting them back to integers. mutate_if will find columns that satisfy the first argument and convert them using the second argument. 
+
 
 # function 2
 # read in pattern similarity data map
-read_simi <-
-  function(simi_file, label_file) {
-    # load data
-    simi <- read_tsv(simi_file, col_types = "ccccdd")
-    # load labels
-    labels <- read_labels(label_file)
-    # merge labels into data table
-    simi <- left_join(simi, labels, by = c("subj_id", "pair_index"))
-    return(simi)
-  }
+read_simi <- function(simi_file, label_file) {
+  # load data
+  simi <- read_tsv(simi_file, col_types = "ccccdd")
+  # load labels
+  labels <- read_labels(label_file)
+  # merge labels into data table
+  left_join(simi, labels, by = c("subj_id", "pair_index"))
+}
+
+# Cam: Good work on the left_join!
 
 ```
 
 ```{r read-data}
 # map 1
-simi_list_rtv <- 
-  map_chr(
-  subj_list, ~ path(
-    data_dir,
-    glue("sub-", .x),
-    "roi_pearson_similarity",
-    glue(
-      "sub-",
-      .x,
-      "_space-T1w_task-retrieval_desc-{preproc_id}-{estimate_id}-zr{flavor_id}_similarity.tsv"
-    )
-  )
-)
+# simi_list_rtv <- map_chr(
+#   subj_list, ~ path(
+#     data_dir,
+#     glue("sub-", .x),
+#     "roi_pearson_similarity",
+#     glue(
+#       "sub-",
+#       .x,
+#       "_space-T1w_task-retrieval_desc-{preproc_id}-{estimate_id}-zr{flavor_id}_similarity.tsv"
+#     )
+#   )
+# )
+
+# Cam: Nice work glueing the "sub-" with the .x before combining using path!
+simi_list_rtv <- map_chr(subj_list, ~path(data_dir, 
+                                          glue("sub-", .x),
+                                          "roi_pearson_similarity",
+                                          glue("sub-", 
+                                               .x,
+                                               "_space-T1w_task-retrieval_desc-",
+                                               "{preproc_id}-{estimate_id}-zr{flavor_id}",
+                                               "_similarity.tsv")))
 
 # map 2
-labels_list <-
-  map_chr(
-    subj_list, ~ path(
-      data_dir,
-      glue("sub-", .x),
-      "beh_labels",
-      glue("sub-", .x, "_labels_pairwise.tsv")
-    )
-  )
+# labels_list <-
+#   map_chr(
+#     subj_list, ~ path(
+#       data_dir,
+#       glue("sub-", .x),
+#       "beh_labels",
+#       glue("sub-", .x, "_labels_pairwise.tsv")
+#     )
+#   )
+
+labels_list <- map_chr(subj_list, ~ path(data_dir,
+                                         glue("sub-", .x),
+                                         "beh_labels",
+                                         glue("sub-", .x, "_labels_pairwise.tsv")))
 
 # map2_*
 # get the combined data
-simi_rtv_raw <- map2_df(simi_list_rtv, labels_list, ~ read_simi(.x, .y))
+simi_rtv_raw <- map2_df(simi_list_rtv, labels_list, ~read_simi(.x, .y))
+
+# Cam: Nice work on your parallel iteration!
+
 ```
 
 ```{r reduce-unrelated-pairs}
 # the raw data have full pairwise pattern similarity results
 # reduce the two items that are not in the same run
 simi_rtv_reduced <- simi_rtv_raw %>% 
-  filter(!i1_run_type == i2_run_type) %>% 
-  filter(i1_group == i2_group) %>% 
-  mutate(group = (i1_group + i2_group)/2) %>% 
-  select(subj_id, atlas_id, roi_id, roi_hemi, similarity, i1_item, i2_item, group, i1_obj, i2_obj)
+  filter(!i1_run_type == i2_run_type,
+         i1_group == i2_group) %>% 
+  mutate(group = (i1_group + i2_group) / 2) %>% 
+  select(ends_with("id"), 
+         roi_hemi, 
+         similarity, 
+         ends_with("item"),
+         group,
+         ends_with("obj"))
+
 # atlas_id: the brain altas name
 # roi_id: the region of interest
 # roi_hemi: left/right/bi
+
+# Cam: I added some helper functions to the select above, but I'm not sure they will save much time. Your way is probably clearer. 
+
 ```
 
 ```{r separate-within-item}
 # get within-item data and non within-item data
 simi_rtv_within <- simi_rtv_reduced %>% 
   filter(i1_item == i2_item)
+
 simi_rtv_non_within <- simi_rtv_reduced %>% 
   filter(!i1_item == i2_item)
 ```
 
 ```{r label-same-pair}
-# for non within-item data label info that can help with labling category info
+# for non within-item data label info that can help with labelling category info
 simi_rtv_non_within_pair <- simi_rtv_non_within %>% 
-  mutate(
-    pair_match = case_when(
-      (i1_item < i2_item) ~ sprintf("%02d%02d", i1_item,i2_item),
-      (i1_item > i2_item) ~ sprintf("%02d%02d", i2_item,i1_item)
-    ),
-    pair_match_obj = case_when(
-      (i1_obj < i2_obj) ~ sprintf("%02d%02d", i1_obj,i2_obj),
-      (i1_obj > i2_obj) ~ sprintf("%02d%02d", i2_obj,i1_obj)
-    )
-  ) %>% 
+  mutate(pair_match = case_when((i1_item < i2_item) ~ sprintf("%02d%02d", i1_item, i2_item),
+                                (i1_item > i2_item) ~ sprintf("%02d%02d", i2_item, i1_item)),
+         pair_match_obj = case_when((i1_obj < i2_obj) ~ sprintf("%02d%02d", i1_obj, i2_obj),
+                                    (i1_obj > i2_obj) ~ sprintf("%02d%02d", i2_obj, i1_obj)))
+
+# Cam: Nice use of sprintf and case_when! I just split this code into two becasue I was having a hard time
+# parsing what was happening. 
+
+simi_rtv_non_within_pair <- simi_rtv_non_within_pair %>%
   group_by(subj_id, atlas_id, roi_id, roi_hemi, pair_match, pair_match_obj) %>% 
   summarise(similarity = mean(similarity),
             group = mean(group)) %>% 
@@ -149,15 +176,20 @@ simi_rtv_non_within_pair <- simi_rtv_non_within %>%
   separate(col = pair_match_obj, into = c("i1_obj", "i2_obj"), sep = 2) %>%
   ungroup()
 
-simi_rtv_non_within_pair$i1_item <- as.integer(simi_rtv_non_within_pair$i1_item)
-simi_rtv_non_within_pair$i2_item <- as.integer(simi_rtv_non_within_pair$i2_item)
-simi_rtv_non_within_pair$i1_obj <- as.integer(simi_rtv_non_within_pair$i1_obj)
-simi_rtv_non_within_pair$i2_obj <- as.integer(simi_rtv_non_within_pair$i2_obj)
+# simi_rtv_non_within_pair$i1_item <- as.integer(simi_rtv_non_within_pair$i1_item)
+# simi_rtv_non_within_pair$i2_item <- as.integer(simi_rtv_non_within_pair$i2_item)
+# simi_rtv_non_within_pair$i1_obj <- as.integer(simi_rtv_non_within_pair$i1_obj)
+# simi_rtv_non_within_pair$i2_obj <- as.integer(simi_rtv_non_within_pair$i2_obj)
+
+# Cam: This looks like a great spot for `mutate_at` :)
+simi_rtv_non_within_pair <- simi_rtv_non_within_pair %>%
+  mutate_at(vars(starts_with("i")), as.integer)
+
 simi_rtv_unlabel <- rbind(simi_rtv_within, simi_rtv_non_within_pair)
 ```
 
 ```{r label-category}
-# lable all categories
+# label all categories
 simi_rtv <-  simi_rtv_unlabel %>% 
   mutate(
     simi_cond = case_when(
@@ -205,6 +237,8 @@ simi_rtv <-  simi_rtv_unlabel %>%
       TRUE ~ "other"
     )
   )
+
+# Cam: I've tried to streamline this using a couple different methods and none seem to provide a comparable solution. In any case, good job figuring out a solution that worked!
 ```
 
 
@@ -216,7 +250,8 @@ dat_rtv <- simi_rtv %>%
   summarise(similarity = mean(similarity)) %>%
   ungroup() %>% 
   filter(!simi_cond == 'other') %>% 
-  filter(roi_id %in% c("ANG", "IPS","SPL","HPC","OTC"))
+  filter(roi_id %in% c("ANG", "IPS","SPL","HPC","OTC")) # Cam: Nice use of %in% to find where roi_id matches any of the list!
+
 dat_rtv$group <- recode_factor(dat_rtv$group, `1` = "Paired", `2` = "Control")
 dat_rtv$simi_cond <- factor(dat_rtv$simi_cond, levels = c("within_item", "same_color", "between_pair", "within_pair"))
 ```
@@ -241,40 +276,29 @@ kable(dat_rtv_all)
 tmp <- dat_rtv %>% 
   group_by(atlas_id, roi_id, roi_hemi, subj_id, group) %>% 
   nest() %>% 
-  mutate(
-    data = map(data, 
-               ~ data.frame(spread(data = ., key = simi_cond, value = similarity))),
-    group_contrast = map(data, 
-                         ~ mutate(., a = (same_color - between_pair)) %>% # substract between_pair similarity from the same_color similarity
-                           pull()),
-    group_contrast = as.numeric(group_contrast)
-  ) %>% 
+  mutate(data = map(data, ~data.frame(spread(data = ., key = simi_cond, value = similarity))),
+         # substract between_pair similarity from the same_color similarity
+         group_contrast = map(data, ~mutate(., a = (same_color - between_pair)) %>% pull()), 
+         group_contrast = as.numeric(group_contrast)) %>% 
   select(-data) %>% 
   unnest() %>% 
   group_by(atlas_id, roi_id, roi_hemi) %>% 
   nest() %>% 
-  mutate(
-    one_way = map(data, 
-                  ~ aov_ez(data = ., id = "subj_id", dv = "group_contrast", within = "group")) # one-way within-subject anova
-  )
+  mutate(one_way = map(data, ~aov_ez(data = ., id = "subj_id", dv = "group_contrast", within = "group"))) # one-way within-subject anova
+
+# Cam: Wow! Double-nest mutate! Nicely done!
+
 
 # get model based summary table for plotting
 # error bar indicates within-subject errors
-dat_plot <-
-  tmp %>%
-  mutate(
-    model_based_summary = map(
-      one_way,
-      ~ afex_plot(.x, x = "group", error = "within", error_ci = FALSE, return = "data")
-    ),
-    summary_table = map(
-      model_based_summary,
-      ~ magrittr::extract2(.x, 1)
-    )
-  ) %>% 
+dat_plot <- tmp %>%
+  mutate(model_based_summary = map(one_way, ~afex_plot(.x, x = "group", error = "within", error_ci = FALSE, return = "data")),
+         summary_table = map(model_based_summary, ~.x[[1]])) %>% 
   unnest(summary_table) %>% 
   select(atlas_id, roi_id, roi_hemi, x, y, error, lower, upper) %>%
   rename(group = x, similarity = y)
+
+# Cam: The use of magrittr::extract2 above didn't seem 100% necessary, but whatever makes the most sense to you :)
 ```
 
 ```{r }
@@ -282,7 +306,7 @@ dat_plot %>%
   filter(atlas_id == "Destrieux",
          roi_hemi == "bilateral") %>% 
   ggplot(aes(x = group, y = similarity, fill = group)) +
-  facet_wrap(~ roi_id) +
+  facet_wrap(~roi_id) +
   geom_bar(stat = "identity", width = 0.5) +
   geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2, size = 0.7)
 ```
