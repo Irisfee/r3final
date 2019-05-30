@@ -16,23 +16,22 @@ pacman::p_load(tidyverse, here, fs, glue, afex, emmeans, knitr, psych, flexdashb
 ```
 
 ```{r default,  message = FALSE, warning = FALSE}
-knitr::opts_chunk$set(message = FALSE, warning = FALSE)
-knitr::opts_chunk$set(dpi = 300)
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, dpi = 300)
 afex_options(emmeans_model = "multivariate")
 theme_set(ggpubr::theme_pubclean())
 ```
 
 ```{r dir-setting}
 # Directories to bids form data
-bids_dir <- path(here())
-deriv_dir <- path(bids_dir, "derivatives")
-data_dir <- path(deriv_dir, "pattern_similarity")
+bids_dir <- here() # not necessary to use the `path()` function. `here()` suffices.
+deriv_dir <- here("derivatives")
+data_dir <- here("derivatives/pattern_similarity")
 ```
 
 ```{r sub-list}
 # Subject list
 subj_list <- 
-  read_tsv(path(bids_dir, "participants.tsv"), col_types = "cicc") %>% 
+  read_tsv(here("participants.tsv"), col_types = "cicc") %>% 
   select(participant_id) %>% 
   separate(participant_id, c("prefix", "id"), sep = "-") %>% 
   pull(id)
@@ -43,7 +42,7 @@ subj_list <-
 # pattern similarity data were processed with python
 preproc_id <-  "hp0p01-smooth1p7"
 estimate_id <- "tmaps"
-flavor_id <- ""
+#flavor_id <- ""  #This does nothing in the code. No need to include it.
 ```
 
 ```{r helper-function}
@@ -80,28 +79,16 @@ read_simi <-
 # map 1
 simi_list_rtv <- 
   map_chr(
-  subj_list, ~ path(
-    data_dir,
-    glue("sub-", .x),
-    "roi_pearson_similarity",
-    glue(
-      "sub-",
-      .x,
-      "_space-T1w_task-retrieval_desc-{preproc_id}-{estimate_id}-zr{flavor_id}_similarity.tsv"
-    )
-  )
-)
+  subj_list, ~ 
+    glue(data_dir, "/sub-", .x, "/roi_pearson_similarity/sub-", .x, "_space-T1w_task-retrieval_desc-{preproc_id}-{estimate_id}-zr_similarity.tsv")
+  )  # Path() is unnecessary. And a single glue function can be used to clean up the path concatenation.
 
 # map 2
 labels_list <-
   map_chr(
-    subj_list, ~ path(
-      data_dir,
-      glue("sub-", .x),
-      "beh_labels",
-      glue("sub-", .x, "_labels_pairwise.tsv")
-    )
-  )
+    subj_list, ~ 
+      glue(data_dir, "/sub-", .x, "/beh_labels/sub-", .x, "_labels_pairwise.tsv")
+  ) # Again, path() is unnecessary. And a single glue function can be used to clean up the path concatenation.
 
 # map2_*
 # get the combined data
@@ -149,15 +136,14 @@ simi_rtv_non_within_pair <- simi_rtv_non_within %>%
   separate(col = pair_match_obj, into = c("i1_obj", "i2_obj"), sep = 2) %>%
   ungroup()
 
-simi_rtv_non_within_pair$i1_item <- as.integer(simi_rtv_non_within_pair$i1_item)
-simi_rtv_non_within_pair$i2_item <- as.integer(simi_rtv_non_within_pair$i2_item)
-simi_rtv_non_within_pair$i1_obj <- as.integer(simi_rtv_non_within_pair$i1_obj)
-simi_rtv_non_within_pair$i2_obj <- as.integer(simi_rtv_non_within_pair$i2_obj)
-simi_rtv_unlabel <- rbind(simi_rtv_within, simi_rtv_non_within_pair)
+simi_rtv_unlabel <- simi_rtv_non_within_pair %>% 
+  modify_at(c("i1_item", "i2_item", "i1_obj", "i2_obj"), as.integer) %>% 
+  rbind(., simi_rtv_non_within_pair)  # Can use a purrr function, modify_at(), instead of changing individual variables to integers. Then pipe to rbind().
 ```
 
 ```{r label-category}
 # lable all categories
+
 simi_rtv <-  simi_rtv_unlabel %>% 
   mutate(
     simi_cond = case_when(
@@ -204,7 +190,7 @@ simi_rtv <-  simi_rtv_unlabel %>%
       (i1_item == 20 & i2_item == 22) ~ 'between_pair',
       TRUE ~ "other"
     )
-  )
+  )  #Since all the i2_item values are linear combinations of the i1_item values, this could be written as a function of some sort. For instance, create a vector of the values of i1_item that are "between_pair" and the i2_item is equal to that value + 1.
 ```
 
 
@@ -231,7 +217,7 @@ dat_rtv_all <- dat_rtv %>%
   spread(key = "simi_cond", value = "similarity") %>% 
   filter(roi_hemi == "bilateral")
 
-kable(dat_rtv_all)
+kable(dat_rtv_all, digits = 2)  # specify digits for readability
 ```
 
 ### Pure color representation: same_color - between_pair
