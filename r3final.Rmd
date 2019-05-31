@@ -24,6 +24,9 @@ theme_set(ggpubr::theme_pubclean())
 
 ```{r dir-setting}
 # Directories to bids form data
+# through the whole scripts we are using path in case someone are going to run the codes over
+# different operation system
+
 bids_dir <- path(here())
 deriv_dir <- path(bids_dir, "derivatives")
 data_dir <- path(deriv_dir, "pattern_similarity")
@@ -47,6 +50,9 @@ flavor_id <- ""
 ```
 
 ```{r helper-function}
+# read in codes with char to avoid possible padding zeros to be droped.
+# it is not an issue here, but this works for all my different projects.
+
 # function 1
 # read in pattern similarity label map (item-wise)
 read_labels <-
