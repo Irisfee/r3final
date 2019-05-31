@@ -16,6 +16,7 @@ pacman::p_load(tidyverse, here, fs, glue, afex, emmeans, knitr, psych, flexdashb
 ```
 
 ```{r default,  message = FALSE, warning = FALSE}
+# separate in different lines to keep things clear
 knitr::opts_chunk$set(message = FALSE, warning = FALSE)
 knitr::opts_chunk$set(dpi = 300)
 afex_options(emmeans_model = "multivariate")
@@ -164,6 +165,11 @@ simi_rtv_unlabel <- rbind(simi_rtv_within, simi_rtv_non_within_pair)
 
 ```{r label-category}
 # lable all categories
+# we dont choose any "better" way to shorten this part
+# because the category labeling is under conceptual discussion
+# in my actual data set we make even more categories to examine the 
+# research question closely. so this part can't be simplified
+
 simi_rtv <-  simi_rtv_unlabel %>% 
   mutate(
     simi_cond = case_when(
