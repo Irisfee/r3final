@@ -10,6 +10,8 @@ output:
 ---
 
 ```{r pkg, message = FALSE, warning = FALSE}
+#ST: needed to install {pacman} package in addition to {ggpubr}
+
 # to run the codes, ggpubr and magrittr pkgs are also needed
 pacman::p_load(tidyverse, here, fs, glue, afex, emmeans, knitr, psych, flexdashboard)
 # afex is used for stats modeling
@@ -232,6 +234,7 @@ dat_rtv_all <- dat_rtv %>%
   filter(roi_hemi == "bilateral")
 
 kable(dat_rtv_all)
+#ST: I would suggest making the variable names more informative for this table that shows on the dashboard
 ```
 
 ### Pure color representation: same_color - between_pair
@@ -260,6 +263,8 @@ tmp <- dat_rtv %>%
 
 # get model based summary table for plotting
 # error bar indicates within-subject errors
+
+#ST: This code below does not run for me (therfore the plot wont run), it results in an error in ref_grid: Can't handle object of class "afex_aov"  Use help("models", package = "emmeans") for information on supported models. I could not figure out the problem, but am not familiar with this package.
 dat_plot <-
   tmp %>%
   mutate(
