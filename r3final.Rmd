@@ -16,16 +16,20 @@ pacman::p_load(tidyverse, here, fs, glue, afex, emmeans, knitr, psych, flexdashb
 ```
 
 ```{r default,  message = FALSE, warning = FALSE}
-knitr::opts_chunk$set(message = FALSE, warning = FALSE, dpi = 300)
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, 
+                      dpi = 300)
+
 afex_options(emmeans_model = "multivariate")
 theme_set(ggpubr::theme_pubclean())
 ```
 
 ```{r dir-setting}
 # Directories to bids form data
+
 bids_dir <- here() # not necessary to use the `path()` function. `here()` suffices.
 deriv_dir <- here("derivatives")
-data_dir <- here("derivatives/pattern_similarity")
+data_dir <- here("derivatives", "pattern_similarity") # use the comma instead of a file separator to make it non-OS specific
+
 ```
 
 ```{r sub-list}
@@ -46,6 +50,9 @@ estimate_id <- "tmaps"
 ```
 
 ```{r helper-function}
+# read in codes with char to avoid possible padding zeros to be droped.
+# it is not an issue here, but this works for all my different projects.
+
 # function 1
 # read in pattern similarity label map (item-wise)
 read_labels <-
@@ -80,14 +87,15 @@ read_simi <-
 simi_list_rtv <- 
   map_chr(
   subj_list, ~ 
-    glue(data_dir, "/sub-", .x, "/roi_pearson_similarity/sub-", .x, "_space-T1w_task-retrieval_desc-{preproc_id}-{estimate_id}-zr_similarity.tsv")
+    glue(data_dir, .Platform$file.sep, "sub-", .x, .Platform$file.sep,"roi_pearson_similarity", .Platform$file.sep, "sub-", .x, "_space-T1w_task-retrieval_desc-{preproc_id}-{estimate_id}-zr_similarity.tsv")
   )  # Path() is unnecessary. And a single glue function can be used to clean up the path concatenation.
+# .Platform$file.sep will give the appropriate file separator based on the user's OS
 
 # map 2
 labels_list <-
   map_chr(
     subj_list, ~ 
-      glue(data_dir, "/sub-", .x, "/beh_labels/sub-", .x, "_labels_pairwise.tsv")
+      glue(data_dir, .Platform$file.sep, "sub-", .x, .Platform$file.sep, "beh_labels", .Platform$file.sep, "sub-", .x, "_labels_pairwise.tsv")
   ) # Again, path() is unnecessary. And a single glue function can be used to clean up the path concatenation.
 
 # map2_*
@@ -143,6 +151,11 @@ simi_rtv_unlabel <- simi_rtv_non_within_pair %>%
 
 ```{r label-category}
 # lable all categories
+
+# we dont choose any "better" way to shorten this part
+# because the category labeling is under conceptual discussion
+# in my actual data set we make even more categories to examine the 
+# research question closely. so this part can't be simplified
 
 simi_rtv <-  simi_rtv_unlabel %>% 
   mutate(

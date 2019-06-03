@@ -818,7 +818,7 @@ html, body {
 <span class="navbar-brand">
   R3 final: Parietal cortex’s role in tracking adaptive memory feature
   <span class="navbar-author">
-    Xi Yang, Yufei Zhao — May-30-2019 14:28
+    Xi Yang, Yufei Zhao — Jun-03-2019 12:03
     </span>
 </span>
 
@@ -2794,16 +2794,20 @@ pacman::p_load(tidyverse, here, fs, glue, afex, emmeans, knitr, psych, flexdashb
 ```
 
 ```{r default,  message = FALSE, warning = FALSE}
-knitr::opts_chunk$set(message = FALSE, warning = FALSE, dpi = 300)
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, 
+                      dpi = 300)
+
 afex_options(emmeans_model = &quot;multivariate&quot;)
 theme_set(ggpubr::theme_pubclean())
 ```
 
 ```{r dir-setting}
 # Directories to bids form data
+
 bids_dir &lt;- here() # not necessary to use the `path()` function. `here()` suffices.
 deriv_dir &lt;- here(&quot;derivatives&quot;)
-data_dir &lt;- here(&quot;derivatives/pattern_similarity&quot;)
+data_dir &lt;- here(&quot;derivatives&quot;, &quot;pattern_similarity&quot;) # use the comma instead of a file separator to make it non-OS specific
+
 ```
 
 ```{r sub-list}
@@ -2824,6 +2828,9 @@ estimate_id &lt;- &quot;tmaps&quot;
 ```
 
 ```{r helper-function}
+# read in codes with char to avoid possible padding zeros to be droped.
+# it is not an issue here, but this works for all my different projects.
+
 # function 1
 # read in pattern similarity label map (item-wise)
 read_labels &lt;-
@@ -2858,14 +2865,15 @@ read_simi &lt;-
 simi_list_rtv &lt;- 
   map_chr(
   subj_list, ~ 
-    glue(data_dir, &quot;/sub-&quot;, .x, &quot;/roi_pearson_similarity/sub-&quot;, .x, &quot;_space-T1w_task-retrieval_desc-{preproc_id}-{estimate_id}-zr_similarity.tsv&quot;)
+    glue(data_dir, .Platform$file.sep, &quot;sub-&quot;, .x, .Platform$file.sep,&quot;roi_pearson_similarity&quot;, .Platform$file.sep, &quot;sub-&quot;, .x, &quot;_space-T1w_task-retrieval_desc-{preproc_id}-{estimate_id}-zr_similarity.tsv&quot;)
   )  # Path() is unnecessary. And a single glue function can be used to clean up the path concatenation.
+# .Platform$file.sep will give the appropriate file separator based on the user's OS
 
 # map 2
 labels_list &lt;-
   map_chr(
     subj_list, ~ 
-      glue(data_dir, &quot;/sub-&quot;, .x, &quot;/beh_labels/sub-&quot;, .x, &quot;_labels_pairwise.tsv&quot;)
+      glue(data_dir, .Platform$file.sep, &quot;sub-&quot;, .x, .Platform$file.sep, &quot;beh_labels&quot;, .Platform$file.sep, &quot;sub-&quot;, .x, &quot;_labels_pairwise.tsv&quot;)
   ) # Again, path() is unnecessary. And a single glue function can be used to clean up the path concatenation.
 
 # map2_*
@@ -2921,6 +2929,11 @@ simi_rtv_unlabel &lt;- simi_rtv_non_within_pair %&gt;%
 
 ```{r label-category}
 # lable all categories
+
+# we dont choose any &quot;better&quot; way to shorten this part
+# because the category labeling is under conceptual discussion
+# in my actual data set we make even more categories to examine the 
+# research question closely. so this part can't be simplified
 
 simi_rtv &lt;-  simi_rtv_unlabel %&gt;% 
   mutate(
