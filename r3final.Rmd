@@ -1,7 +1,7 @@
 ---
 title: "R3 final: Parietal cortex's role in tracking adaptive memory feature"
 author: "Xi Yang, Yufei Zhao"
-date: "`r format(Sys.time(), '%b-%d-%Y %H:%M')`"
+date: "`r format(Sys.time(), '%b-%d-%Y %H:%M')`" 
 output: 
   flexdashboard::flex_dashboard:
     orientation: rows
@@ -68,6 +68,8 @@ read_labels <-
     return(labels)
   }
 
+# BC: could you use helper functions here, e.g. dplyr::starts_with, to reduce the amount of text?
+
 # function 2
 # read in pattern similarity data map
 read_simi <-
@@ -126,6 +128,8 @@ simi_rtv_reduced <- simi_rtv_raw %>%
 # atlas_id: the brain altas name
 # roi_id: the region of interest
 # roi_hemi: left/right/bi
+
+# BC: you could combine your two filter lines into one here
 ```
 
 ```{r separate-within-item}
@@ -156,11 +160,15 @@ simi_rtv_non_within_pair <- simi_rtv_non_within %>%
   separate(col = pair_match_obj, into = c("i1_obj", "i2_obj"), sep = 2) %>%
   ungroup()
 
+# BC: cool use of case_when. Have never used this before! 
+
 simi_rtv_non_within_pair$i1_item <- as.integer(simi_rtv_non_within_pair$i1_item)
 simi_rtv_non_within_pair$i2_item <- as.integer(simi_rtv_non_within_pair$i2_item)
 simi_rtv_non_within_pair$i1_obj <- as.integer(simi_rtv_non_within_pair$i1_obj)
 simi_rtv_non_within_pair$i2_obj <- as.integer(simi_rtv_non_within_pair$i2_obj)
 simi_rtv_unlabel <- rbind(simi_rtv_within, simi_rtv_non_within_pair)
+
+# BC: you could use mutate_at here to avoid copying and pasting as.integer
 ```
 
 ```{r label-category}
