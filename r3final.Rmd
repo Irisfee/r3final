@@ -40,14 +40,13 @@ data_dir <- path(deriv_dir, "pattern_similarity")
 ```{r sub-list}
 # Subject list
 subj_list <- 
-  read_tsv(here("participants.tsv")) %>% 
+  read_tsv(path(bids_dir, "participants.tsv"), col_types = "cicc") %>% 
   select(participant_id) %>% 
-  separate(participant_id, c(NA, "id"), sep = "-") %>% 
+  separate(participant_id, c("prefix", "id"), sep = "-") %>% 
   pull(id)
-# Changes made based on Cameron's suggestions
 
 # subj_list <- read_tsv(here("derivatives",  "pattern_similarity",  "participants.tsv"), col_types = "cicc")
-# This last line is suggested by Krista and Daniel. We included it here to show a different way to code
+# This last line is suggested by Cameron, Krista and Daniel. We included it here to show a different way to code
 ```
 
 ```{r preprocess-flavor}
@@ -251,7 +250,8 @@ dat_rtv_all <- dat_rtv %>%
   spread(key = "simi_cond", value = "similarity") %>% 
   filter(roi_hemi == "bilateral")
 
-kable(dat_rtv_all)
+kable(dat_rtv_all, digits = 2)
+# Specifying digits for readability. This change is based on Krista's suggestions. 
 ```
 
 ### Pure color representation: same_color - between_pair
