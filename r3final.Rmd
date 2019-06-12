@@ -28,11 +28,9 @@ theme_set(ggpubr::theme_pubclean())
 # through the whole scripts we are using path in case someone are going to run the codes over
 # different operation system
 
-#bids_dir <- path(here())
-#deriv_dir <- path(bids_dir, "derivatives")
-#data_dir <- path(deriv_dir, "pattern_similarity")
-data_dir <- here("derivatives", "pattern_similarity")
-# leveraging to streamline the code, updates based on Cameron's suggestions
+bids_dir <- path(here())
+deriv_dir <- path(bids_dir, "derivatives")
+data_dir <- path(deriv_dir, "pattern_similarity")
 ```
 
 ```{r sub-list}
