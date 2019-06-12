@@ -32,7 +32,7 @@ bids_dir <- path(here())
 deriv_dir <- path(bids_dir, "derivatives")
 data_dir <- path(deriv_dir, "pattern_similarity")
 # data_dir <- here("derivatives", "pattern_similarity")
-# This last line is suggested by Cameron and Krista. We included it here to show a different approach.
+# This last line is suggested by Cameron and Krista. We included it here to show a different way to code.
 ```
 
 ```{r sub-list}
@@ -43,6 +43,9 @@ subj_list <-
   separate(participant_id, c(NA, "id"), sep = "-") %>% 
   pull(id)
 # Changes made based on Cameron's suggestions
+
+# subj_list <- read_tsv(here("derivatives",  "pattern_similarity",  "participants.tsv"), col_types = "cicc")
+# This last line is suggested by Krista and Daniel. We included it here to show a different way to code
 ```
 
 ```{r preprocess-flavor}
