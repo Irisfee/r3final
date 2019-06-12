@@ -17,8 +17,10 @@ pacman::p_load(tidyverse, here, fs, glue, afex, emmeans, knitr, psych, flexdashb
 
 ```{r default,  message = FALSE, warning = FALSE}
 # separate in different lines to keep things clear
-knitr::opts_chunk$set(message = FALSE, warning = FALSE, dpi = 300)
-# updates based on Cameron's suggestions
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
+knitr::opts_chunk$set(dpi = 300)
+# knitr::opts_chunk$set(message = FALSE, warning = FALSE, dpi = 300)
+# The revision in this line is based on suggestions from Cameron and Krista. 
 afex_options(emmeans_model = "multivariate")
 theme_set(ggpubr::theme_pubclean())
 ```
