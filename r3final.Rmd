@@ -282,12 +282,12 @@ dat_plot <-
     ),
     summary_table = map(
       model_based_summary,
-      ~ magrittr::extract2(.x, 1)
-    )
-  ) %>% 
+      ~ .x[[1]])) %>% 
   unnest(summary_table) %>% 
   select(atlas_id, roi_id, roi_hemi, x, y, error, lower, upper) %>%
   rename(group = x, similarity = y)
+
+# removed magrittr::extract2 based on Cameron's suggestions
 ```
 
 ```{r }
