@@ -31,6 +31,8 @@ theme_set(ggpubr::theme_pubclean())
 bids_dir <- path(here())
 deriv_dir <- path(bids_dir, "derivatives")
 data_dir <- path(deriv_dir, "pattern_similarity")
+# data_dir <- here("derivatives", "pattern_similarity")
+# This last line is suggested by Cameron and Krista. We included it here to show a different approach.
 ```
 
 ```{r sub-list}
