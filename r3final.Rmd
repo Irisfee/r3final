@@ -17,8 +17,8 @@ pacman::p_load(tidyverse, here, fs, glue, afex, emmeans, knitr, psych, flexdashb
 
 ```{r default,  message = FALSE, warning = FALSE}
 # separate in different lines to keep things clear
-knitr::opts_chunk$set(message = FALSE, warning = FALSE)
-knitr::opts_chunk$set(dpi = 300)
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, dpi = 300)
+# updates based on Cameron's suggestions
 afex_options(emmeans_model = "multivariate")
 theme_set(ggpubr::theme_pubclean())
 ```
@@ -28,18 +28,21 @@ theme_set(ggpubr::theme_pubclean())
 # through the whole scripts we are using path in case someone are going to run the codes over
 # different operation system
 
-bids_dir <- path(here())
-deriv_dir <- path(bids_dir, "derivatives")
-data_dir <- path(deriv_dir, "pattern_similarity")
+#bids_dir <- path(here())
+#deriv_dir <- path(bids_dir, "derivatives")
+#data_dir <- path(deriv_dir, "pattern_similarity")
+data_dir <- here("derivatives", "pattern_similarity")
+# leveraging to streamline the code, updates based on Cameron's suggestions
 ```
 
 ```{r sub-list}
 # Subject list
 subj_list <- 
-  read_tsv(path(bids_dir, "participants.tsv"), col_types = "cicc") %>% 
+  read_tsv(here("participants.tsv")) %>% 
   select(participant_id) %>% 
-  separate(participant_id, c("prefix", "id"), sep = "-") %>% 
+  separate(participant_id, c(NA, "id"), sep = "-") %>% 
   pull(id)
+# Changes made based on Cameron's suggestions
 ```
 
 ```{r preprocess-flavor}
@@ -58,15 +61,10 @@ flavor_id <- ""
 # read in pattern similarity label map (item-wise)
 read_labels <-
   function(label_file) {
-    labels <- read_tsv(label_file, na = "999", col_types = cols(.default = col_character())) %>%
-      mutate_at(
-        c(
-          "i1_group", "i2_group", "i1_item", "i2_item", "i1_pair", "i2_pair", "i1_color", "i2_color", "i1_obj", "i2_obj",  "pair_index"
-        ),
-        as.integer
-      )
-    return(labels)
+    read_tsv(label_file, na = "999") %>%
+    mutate_if(is.double, as.integer)
   }
+# Changes made based on Cameron's suggestions
 
 # function 2
 # read in pattern similarity data map
@@ -77,10 +75,9 @@ read_simi <-
     # load labels
     labels <- read_labels(label_file)
     # merge labels into data table
-    simi <- left_join(simi, labels, by = c("subj_id", "pair_index"))
-    return(simi)
+    left_join(simi, labels, by = c("subj_id", "pair_index"))
   }
-
+# Changes made based on Cameron's suggestions
 ```
 
 ```{r read-data}
@@ -119,10 +116,17 @@ simi_rtv_raw <- map2_df(simi_list_rtv, labels_list, ~ read_simi(.x, .y))
 # the raw data have full pairwise pattern similarity results
 # reduce the two items that are not in the same run
 simi_rtv_reduced <- simi_rtv_raw %>% 
-  filter(!i1_run_type == i2_run_type) %>% 
-  filter(i1_group == i2_group) %>% 
+  filter(!i1_run_type == i2_run_type,
+         i1_group == i2_group) %>% 
   mutate(group = (i1_group + i2_group)/2) %>% 
-  select(subj_id, atlas_id, roi_id, roi_hemi, similarity, i1_item, i2_item, group, i1_obj, i2_obj)
+  select(ends_with("id"), 
+         roi_hemi, 
+         similarity, 
+         ends_with("item"),
+         group,
+         ends_with("obj"))
+# more concise style changes based on Cameron's suggestions
+
 # atlas_id: the brain altas name
 # roi_id: the region of interest
 # roi_hemi: left/right/bi
@@ -137,7 +141,7 @@ simi_rtv_non_within <- simi_rtv_reduced %>%
 ```
 
 ```{r label-same-pair}
-# for non within-item data label info that can help with labling category info
+# for non within-item data label info that can help with lablling category info
 simi_rtv_non_within_pair <- simi_rtv_non_within %>% 
   mutate(
     pair_match = case_when(
@@ -156,10 +160,9 @@ simi_rtv_non_within_pair <- simi_rtv_non_within %>%
   separate(col = pair_match_obj, into = c("i1_obj", "i2_obj"), sep = 2) %>%
   ungroup()
 
-simi_rtv_non_within_pair$i1_item <- as.integer(simi_rtv_non_within_pair$i1_item)
-simi_rtv_non_within_pair$i2_item <- as.integer(simi_rtv_non_within_pair$i2_item)
-simi_rtv_non_within_pair$i1_obj <- as.integer(simi_rtv_non_within_pair$i1_obj)
-simi_rtv_non_within_pair$i2_obj <- as.integer(simi_rtv_non_within_pair$i2_obj)
+simi_rtv_non_within_pair <- simi_rtv_non_within_pair %>%
+  mutate_at(vars(starts_with("i")), as.integer)
+# changes made based on Cameron's suggestions
 simi_rtv_unlabel <- rbind(simi_rtv_within, simi_rtv_non_within_pair)
 ```
 
